@@ -2,6 +2,7 @@ package com.example.backend.dao;
 
 import com.example.backend.model.User;
 import com.example.backend.util.DBConnection;
+import com.example.backend.util.PasswordUtil;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,6 +82,33 @@ public class UserDAO {
         return null;
     }
 
+    public User upsertGoogleUser(String googleId, String email, String fullName, String avatarUrl) {
+        if (isNullOrEmpty(googleId) || isNullOrEmpty(email)) {
+            return null;
+        }
+
+        String normalizedEmail = email.trim().toLowerCase();
+        User byGoogleId = findByGoogleId(googleId);
+        if (byGoogleId != null) {
+            User refreshed = refreshGoogleProfile(byGoogleId, fullName, avatarUrl);
+            return refreshed != null ? refreshed : byGoogleId;
+        }
+
+        User byEmail = findByEmail(normalizedEmail);
+        if (byEmail != null) {
+            if (!isNullOrEmpty(byEmail.getGoogleId()) && !googleId.equals(byEmail.getGoogleId())) {
+                System.err.println("Google ID mismatch for email: " + normalizedEmail);
+                return null;
+            }
+            if (!updateGoogleUser(byEmail, googleId, fullName, avatarUrl)) {
+                return null;
+            }
+            return getUserById(byEmail.getId());
+        }
+
+        return createGoogleUser(googleId, normalizedEmail, fullName, avatarUrl);
+    }
+
     //Tìm user theo email hoặc số điện thoại (dùng cho quên mật khẩu)
     public User findByEmailOrPhone(String emailOrPhone) {
         String sql = "SELECT u.*, r.name AS role " +
@@ -108,6 +136,181 @@ public class UserDAO {
             closeResources(conn, pstmt, rs);
         }
         return null;
+    }
+
+    private User findByGoogleId(String googleId) {
+        String sql = "SELECT u.*, r.name AS role " +
+                "FROM users u " +
+                "LEFT JOIN role r ON u.role_id = r.id " +
+                "WHERE u.google_id = ?";
+
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DBConnection.getConnection();
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, googleId);
+            rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return extractUserFromResultSet(rs);
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi khi tìm user theo google_id: " + e.getMessage());
+        } finally {
+            closeResources(conn, pstmt, rs);
+        }
+        return null;
+    }
+
+    private User refreshGoogleProfile(User user, String fullName, String avatarUrl) {
+        String updatedFullName = user.getFullName();
+        String updatedAvatarUrl = user.getAvatarUrl();
+        boolean needsUpdate = false;
+
+        if (isNullOrEmpty(updatedFullName) && !isNullOrEmpty(fullName)) {
+            updatedFullName = fullName.trim();
+            needsUpdate = true;
+        }
+        if (isNullOrEmpty(updatedAvatarUrl) && !isNullOrEmpty(avatarUrl)) {
+            updatedAvatarUrl = avatarUrl.trim();
+            needsUpdate = true;
+        }
+
+        if (!needsUpdate) {
+            return user;
+        }
+
+        boolean updated = updateGoogleUserFields(user.getId(), null, updatedFullName, updatedAvatarUrl);
+        if (!updated) {
+            return null;
+        }
+        return getUserById(user.getId());
+    }
+
+    private boolean updateGoogleUser(User user, String googleId, String fullName, String avatarUrl) {
+        String updatedFullName = user.getFullName();
+        String updatedAvatarUrl = user.getAvatarUrl();
+        String updatedGoogleId = user.getGoogleId();
+        boolean needsUpdate = false;
+
+        if (isNullOrEmpty(updatedGoogleId) && !isNullOrEmpty(googleId)) {
+            updatedGoogleId = googleId;
+            needsUpdate = true;
+        }
+        if (isNullOrEmpty(updatedFullName) && !isNullOrEmpty(fullName)) {
+            updatedFullName = fullName.trim();
+            needsUpdate = true;
+        }
+        if (isNullOrEmpty(updatedAvatarUrl) && !isNullOrEmpty(avatarUrl)) {
+            updatedAvatarUrl = avatarUrl.trim();
+            needsUpdate = true;
+        }
+
+        if (!needsUpdate) {
+            return true;
+        }
+
+        return updateGoogleUserFields(user.getId(), updatedGoogleId, updatedFullName, updatedAvatarUrl);
+    }
+
+    private boolean updateGoogleUserFields(int userId, String googleId, String fullName, String avatarUrl) {
+        List<String> updates = new ArrayList<>();
+        List<Object> params = new ArrayList<>();
+
+        if (!isNullOrEmpty(googleId)) {
+            updates.add("google_id = ?");
+            params.add(googleId);
+        }
+        if (!isNullOrEmpty(fullName)) {
+            updates.add("full_name = ?");
+            params.add(fullName);
+        }
+        if (!isNullOrEmpty(avatarUrl)) {
+            updates.add("avatar_url = ?");
+            params.add(avatarUrl);
+        }
+
+        if (updates.isEmpty()) {
+            return true;
+        }
+
+        String sql = "UPDATE users SET " + String.join(", ", updates) + " WHERE id = ?";
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+
+        try {
+            conn = DBConnection.getConnection();
+            pstmt = conn.prepareStatement(sql);
+            int index = 1;
+            for (Object param : params) {
+                pstmt.setObject(index++, param);
+            }
+            pstmt.setInt(index, userId);
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException e) {
+            System.err.println("Lỗi khi cập nhật google user: " + e.getMessage());
+            return false;
+        } finally {
+            closeResources(conn, pstmt, null);
+        }
+    }
+
+    private User createGoogleUser(String googleId, String email, String fullName, String avatarUrl) {
+        String safeFullName = normalizeFullName(fullName, email);
+        String randomPassword = PasswordUtil.generateRandomPassword(16);
+        String hashedPassword = PasswordUtil.encrypt(randomPassword);
+        if (hashedPassword == null) {
+            return null;
+        }
+
+        String sql = "INSERT INTO users (full_name, email, phone, password, role_id, status, created_at, google_id, avatar_url) " +
+                "VALUES (?, ?, ?, ?, COALESCE((SELECT id FROM role WHERE name = ?), 1), ?, NOW(), ?, ?)";
+
+        Connection conn = null;
+        PreparedStatement pstmt = null;
+
+        try {
+            conn = DBConnection.getConnection();
+            pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, safeFullName);
+            pstmt.setString(2, email);
+            pstmt.setString(3, null);
+            pstmt.setString(4, hashedPassword);
+            pstmt.setString(5, "user");
+            pstmt.setString(6, "active");
+            pstmt.setString(7, googleId);
+            pstmt.setString(8, avatarUrl);
+
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected > 0) {
+                return findByEmail(email);
+            }
+        } catch (SQLException e) {
+            System.err.println("Lỗi khi tạo user Google: " + e.getMessage());
+        } finally {
+            closeResources(conn, pstmt, null);
+        }
+        return null;
+    }
+
+    private String normalizeFullName(String fullName, String email) {
+        if (!isNullOrEmpty(fullName)) {
+            return fullName.trim();
+        }
+        if (!isNullOrEmpty(email)) {
+            int atIndex = email.indexOf('@');
+            if (atIndex > 0) {
+                return email.substring(0, atIndex);
+            }
+        }
+        return "User";
+    }
+
+    private boolean isNullOrEmpty(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     //Cập nhật mật khẩu theo user id
@@ -405,6 +608,8 @@ public class UserDAO {
             if (hasColumn(rs, "email")) user.setEmail(rs.getString("email"));
             if (hasColumn(rs, "phone")) user.setPhone(rs.getString("phone"));
             if (hasColumn(rs, "password")) user.setPassword(rs.getString("password"));
+            if (hasColumn(rs, "google_id")) user.setGoogleId(rs.getString("google_id"));
+            if (hasColumn(rs, "avatar_url")) user.setAvatarUrl(rs.getString("avatar_url"));
             if (hasColumn(rs, "role_id")) user.setRoleId(rs.getInt("role_id"));
             if (hasColumn(rs, "role")) user.setRole(rs.getString("role"));
             if (hasColumn(rs, "created_at")) user.setCreatedAt(rs.getTimestamp("created_at"));

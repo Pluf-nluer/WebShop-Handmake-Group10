@@ -12,6 +12,8 @@ public class User {
     private String email;              // Email (dùng để đăng nhập)
     private String phone;              // Số điện thoại (cũng có thể dùng để đăng nhập)
     private String password;           // Mật khẩu (đã được mã hóa)
+    private String googleId;           // ID Google (nếu đăng nhập Google)
+    private String avatarUrl;          // Ảnh đại diện
     private String role;               // Vai trò: "user" hoặc "admin"
     private int roleId;                // ID vai trò từ bảng role
     private boolean isActive;          // Trạng thái: true = hoạt động, false = bị khóa
@@ -92,6 +94,22 @@ public class User {
         this.password = password;
     }
 
+    public String getGoogleId() {
+        return googleId;
+    }
+
+    public void setGoogleId(String googleId) {
+        this.googleId = googleId;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
+
     public String getRole() {
         return role;
     }
@@ -140,6 +158,8 @@ public class User {
                 ", fullName='" + fullName + '\'' +
                 ", email='" + email + '\'' +
                 ", phone='" + phone + '\'' +
+                ", googleId='" + googleId + '\'' +
+                ", avatarUrl='" + avatarUrl + '\'' +
                 ", role='" + role + '\'' +
                 ", roleId=" + roleId +
                 ", isActive=" + isActive +
