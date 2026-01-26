@@ -2,7 +2,6 @@ package com.example.backend.controller.user;
 
 import com.example.backend.dao.UserDAO;
 import com.example.backend.model.User;
-import com.example.backend.util.CheckoutSessionUtil;
 import com.example.backend.util.PasswordUtil;
 
 import jakarta.servlet.ServletException;
@@ -147,13 +146,8 @@ public class RegisterServlet extends HttpServlet {
                     session.setAttribute("userName", user.getFullName());
                     session.setAttribute("userRole", user.getRole());
                     session.setMaxInactiveInterval(30 * 60);
-                    int orderId = CheckoutSessionUtil.placeOrderFromSession(session);
                     session.removeAttribute("postLoginRedirect");
-                    if (orderId > 0) {
-                        response.sendRedirect(request.getContextPath() + "/order-success.jsp");
-                        return;
-                    }
-                    response.sendRedirect(request.getContextPath() + "/checkout");
+                    response.sendRedirect(redirectUrl);
                     return;
                 }
             }

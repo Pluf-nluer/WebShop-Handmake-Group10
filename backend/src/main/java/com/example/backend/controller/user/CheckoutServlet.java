@@ -4,8 +4,6 @@ import com.example.backend.dao.OrderDao;
 import com.example.backend.model.Cart;
 import com.example.backend.model.Order;
 import com.example.backend.model.User;
-import com.example.backend.util.CheckoutSessionUtil;
-
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 import jakarta.servlet.annotation.*;
@@ -17,6 +15,7 @@ import java.util.Map;
 @WebServlet(name = "CheckoutServlet", value = "/checkout")
 public class CheckoutServlet extends HttpServlet {
     private static final String POST_LOGIN_REDIRECT_KEY = "postLoginRedirect";
+    private static final String CHECKOUT_FORM_SESSION_KEY = "checkoutForm";
     @Override
     protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.getRequestDispatcher("checkout.jsp").forward(request,response);
@@ -84,7 +83,7 @@ public class CheckoutServlet extends HttpServlet {
             // Nếu orderId lớn hơn 0 nghĩa là thực hiện thanh toán thành công và thực hiện xóa giỏ hàng
             if(orderId>0){
                 session.removeAttribute("cart");
-                session.removeAttribute(CheckoutSessionUtil.CHECKOUT_FORM_SESSION_KEY);
+                session.removeAttribute(CHECKOUT_FORM_SESSION_KEY);
 
                 request.setAttribute("order",order);
                 request.setAttribute("orderId",orderId);
@@ -116,7 +115,7 @@ public class CheckoutServlet extends HttpServlet {
         putIfPresent(formData, "note", note);
 
         if (!formData.isEmpty()) {
-            session.setAttribute(CheckoutSessionUtil.CHECKOUT_FORM_SESSION_KEY, formData);
+            session.setAttribute(CHECKOUT_FORM_SESSION_KEY, formData);
         }
     }
 
