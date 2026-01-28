@@ -65,6 +65,10 @@ public class ProductDAO {
                 + "INNER JOIN product_images pi ON p.id = pi.product_id "
                 + "WHERE pi.image_url IS NOT NULL AND pi.image_url != '' "
                 + "GROUP BY p.id ORDER BY p.id LIMIT ?, ?";
+//        String sql = "SELECT p.*, MAX(pi.image_url) AS image_url FROM products p "
+//                + "INNER JOIN product_images pi ON p.id = pi.product_id "
+//                + "WHERE pi.image_url IS NOT NULL AND pi.image_url != '' "
+//                + "GROUP BY p.id ORDER BY p.id LIMIT ?, ?";
 
         try (Connection conn = DBConnection.getConnection();
         PreparedStatement ps = conn.prepareStatement(sql);) {
@@ -100,6 +104,11 @@ public class ProductDAO {
                 "LEFT JOIN product_images pi ON p.id = pi.product_id " +
                 "WHERE p.category_id = ? AND p.status = 'active' " +
                 "GROUP BY p.id";
+//        String sql = "SELECT p.*, MAX(NULLIF(pi.image_url, '')) AS image_url " +
+//                "FROM products p " +
+//                "LEFT JOIN product_images pi ON p.id = pi.product_id " +
+//                "WHERE p.id = ? " +
+//                "GROUP BY p.id";
 
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {

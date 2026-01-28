@@ -44,6 +44,7 @@
                         <i class="fa-solid fa-exclamation-circle"></i> ${errorMessage}
                     </div>
                 </c:if>
+                <div class="error-message" id="googleError"></div>
 
                 <form class="login-form" id="loginForm" action="${pageContext.request.contextPath}/login" method="post">
                     <div class="form-group">
@@ -87,12 +88,14 @@
                 </div>
 
                 <div class="social-login">
-                    <button type="button" class="btn-social btn-facebook">
-                        <i class="fa-brands fa-facebook-f"></i> Facebook
-                    </button>
-                    <button type="button" class="btn-social btn-google">
-                        <i class="fa-brands fa-google"></i> Google
-                    </button>
+                    <c:if test="${not empty applicationScope.googleClientId}">
+                        <div id="googleButton" class="google-signin"></div>
+                    </c:if>
+                    <c:if test="${empty applicationScope.googleClientId}">
+                        <button type="button" class="btn-social btn-google" disabled title="Google chưa được cấu hình">
+                            <i class="fa-brands fa-google"></i> Đăng nhập với Google
+                        </button>
+                    </c:if>
                 </div>
 
                 <div class="register-link">
@@ -121,5 +124,71 @@
         }
     });
 </script>
+<c:if test="${not empty applicationScope.googleClientId}">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+        const googleClientId = "${applicationScope.googleClientId}";
+        const googleAuthUrl = "${pageContext.request.contextPath}/oauth2/callback/google";
+
+        function showGoogleError(message) {
+            const errorEl = document.getElementById('googleError');
+            if (!errorEl) {
+                alert(message);
+                return;
+            }
+            errorEl.textContent = message;
+            errorEl.classList.add('show');
+        }
+
+        function handleGoogleCredentialResponse(response) {
+            if (!response || !response.credential) {
+                showGoogleError('Dang nhap Google that bai.');
+                return;
+            }
+            const body = new URLSearchParams();
+            body.append('idToken', response.credential);
+
+            fetch(googleAuthUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: body.toString(),
+                credentials: 'same-origin'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success && data.redirectUrl) {
+                        window.location.href = data.redirectUrl;
+                        return;
+                    }
+                    const message = (data && data.message) ? data.message : 'Dang nhap Google that bai.';
+                    showGoogleError(message);
+                })
+                .catch(() => showGoogleError('Khong the ket noi den may chu.'));
+        }
+
+        window.addEventListener('load', () => {
+            if (!window.google || !googleClientId) {
+                return;
+            }
+            google.accounts.id.initialize({
+                client_id: googleClientId,
+                callback: handleGoogleCredentialResponse,
+                locale: 'vi'
+            });
+            const container = document.getElementById('googleButton');
+            if (container) {
+                const width = Math.min(container.offsetWidth || 360, 360);
+                google.accounts.id.renderButton(container, {
+                    theme: 'outline',
+                    size: 'large',
+                    width: width,
+                    text: 'signin_with',
+                    shape: 'rectangular',
+                    logo_alignment: 'left'
+                });
+            }
+        });
+    </script>
+</c:if>
 </body>
 </html>

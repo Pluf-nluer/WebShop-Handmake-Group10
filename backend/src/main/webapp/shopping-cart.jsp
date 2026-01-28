@@ -96,7 +96,7 @@
                                 <fmt:formatNumber value="${sessionScope.cart.totalMoney}" type="currency" currencySymbol="₫" maxFractionDigits="0"/>
                             </span>
                         </div>
-                        <a href="${pageContext.request.contextPath}/checkout.jsp" class="btn-checkout">Thanh toán</a>
+                        <a href="${pageContext.request.contextPath}/checkout" class="btn-checkout">Thanh toán</a>
                     </div>
                 </div>
             </div>
